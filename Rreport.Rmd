@@ -1,0 +1,112 @@
+---
+title: "Final Project"
+output:
+  html_notebook:
+    code_folding: hide
+    theme: united
+    highlight: pygments
+---
+```{r, message = FALSE, warning = FALSE, echo = FALSE, echo = FALSE, results = FALSE}
+source("Rscript.R")
+library("purrr")
+```
+
+
+# Introduction 
+
+Heating your home uses more energy and costs more money than any other system in your home ,especially in the Northern city. Currently, we have multiple heating sources for home buildings we can choose: Natural gas, electricity, propane and so on. More and more service providers are able to provide multiple choices for you for each possible source. 
+
+But as the global warming get more serious, using clean energy becomes the main stream. But it takes time to transfer. So, understanding the percent of each sources change become important. It will help the business to understand what US housing generally use to make heat and whether the trend changed so they can adjust their services based on the results. 
+
+To get the general ideas about the heat source distributions, in this report, we will explore what is the most frequently used heating energy source in each Census Region.
+
+# Data 
+
+We will use the [2012 US Commercial Building Energy Consumption Survey](https://www.eia.gov/consumption/commercial/data/2012/index.php?view=microdata) data to perform the analysis. 
+
+# Methodology
+
+- Filtering out the required variables. In this analysis, we will use the following variables:
+  + REGION,ELHT1,NGHT1,FKHT1,PRHT1,STHT1,HWHT1,WOHT1,COHT1,SOHT1,OTHT1
+    + The region and indicators for each heat sources
+  + FINALWT, FINALWT1 - FINALWT197
+    + The weights we used for domain analysis
+  + The detailed data description is [here](https://www.eia.gov/consumption/commercial/data/2012/xls/2012microdata_codebook.xlsx)
+- Change values for each indicators by using following rule
+  + 1: if that source used for main heat (value: 1)
+  + 0: if that source not used for main heat or value is missing (value 2 or NA)
+- pivot longer the data, storing all the source name into `Source` variable and all the values into `Indicator`
+- using survey library, performing survey mean for each combinations of region and source(ratio for each source)
+- building the `svyglm` models with Gaussian links to test if the difference is significant. (Making sure set up the highest ratio source as the reference levels. )
+
+# Results
+
+## expected proportion for each source with 95% confidence intervals {.tabset}
+
+### table
+```{r}
+cap_tab1 = paste(
+ "**Table 1.** *Proportion of each energy source used in each Region.*",
+ "Numbers in parantheses represent 95% confidence intervals."
+)
+rownames(svyresult) = c()
+svyresult$REGION = svyresult$REGION %>%map(region_map) %>% unlist()
+svyresult$Source = svyresult$Source %>% map(Energy_map) %>% unlist()
+svyresult %>% 
+  filter(indicator != 0) %>%
+  mutate(
+    Region = REGION ,
+    Source = Source ,
+    `Proportion(%)` = sprintf('<div>%4.2f</div> <div>(%4.2f, %4.2f)</div>', 
+                     indicator * 100, lwr * 100, upr * 100)
+  ) %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+    cap = cap_tab1
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+### figures
+```{r fig.cap=cap1a1, fig.height=12, fig.width=5}
+cap1a1 = paste(
+  "**Figure 1** *Proportion of each energy source used in each Region.*"
+)
+svyresult %>% 
+  filter(indicator != 0) %>%
+  transmute(
+    Region = REGION ,
+    Source = Source,
+    indicator = indicator * 100, 
+    lwr = lwr * 100, 
+    upr = upr * 100
+  ) %>%
+  ggplot(
+    aes(x = Source, y = indicator)) +
+  geom_point( position = position_dodge(.5) ) +
+  geom_errorbar( 
+    aes(ymin = lwr, ymax = upr),
+    position = position_dodge(.5), width = 0.2 
+  ) + 
+  facet_grid(Region~.) +
+  coord_flip() +
+  theme_bw() +
+  scale_color_manual(values = c('darkblue', 'darkred')) + 
+  ylab('proportion used(%)') + 
+  xlab('')
+```
+
+### Testing for the significance output 
+```{r}
+summary_report = summary(test_output)
+summary_report$coefficients
+```
+
+# Conclusion 
+
+From the results section, we found out the `natural gas` is the most used source of heat energy. But this finding was not useful for the South Census region. Instead of using the natural gas, the South census region's housing used more electricity for the main heating purpose.So that if the company who focus on development of heating source by electricity can choose the South Census region as the testing market to see how the products work since there is bigger market in the South census region. 
+
+However, the data we used are energy usage for the commercial buildings. Thus, we can't make any predictions about the individuals situation unless we can make some association between the commercials and individuals. 
+
