@@ -2,6 +2,7 @@
 # The R script 
 # Author: Dongyang Zhao
 
+#79:---------------------------------------------------------------------------
 library(readr)
 library(tidyverse)
 library(pander)
@@ -151,3 +152,4 @@ des = svrepdesign(weights=sampweights,
                   data = Data_pivot)
 test_output = svyglm(indicator ~ MainHeatSource:REGION +REGION, des)
 summary(test_output)
+#79:---------------------------------------------------------------------------
