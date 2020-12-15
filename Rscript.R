@@ -1,5 +1,5 @@
 # STATS506 Final Project Script 
-
+# The R script 
 # Author: Dongyang Zhao
 
 library(readr)
@@ -8,6 +8,7 @@ library(pander)
 library(survey)
 Data <- read_csv("Data/2012_public_use_data_aug2016.csv")
 
+# The function we used to convert the code into the actual name
 region_map = function(x){
   if(x == "1"){
     return("Northeast")
@@ -73,12 +74,10 @@ Data_clean = Data %>% select(
   SOHT1,
   OTHT1,
   starts_with("FINALWT")
-) %>% 
-  mutate(
-    REGION = as.factor(REGION)
-  )
+)
 
-
+Data_clean$REGION  = 
+  Data_clean$REGION %>% map(region_map) %>% unlist()
 colname_energy = c(  "ELHT1",
                      "NGHT1",
                      "FKHT1",
@@ -107,13 +106,16 @@ for(i in colname_energy){
   
 }
 
+# Create a new variable `MainHeatSource` for each record
+
 Data_pivot = Data_clean %>% 
   pivot_longer(
     !c(contains("FINALWT"),REGION),
-    names_to = "Source",
+    names_to = "MainHeatSource",
     values_to = "indicator"
   ) 
 
+# store the weights
 sampweights = Data_pivot$FINALWT
 brrwts = Data_pivot %>% select(contains("FINALWT"),-FINALWT)
 
@@ -127,23 +129,25 @@ des = svrepdesign(weights=sampweights,
                   mse=TRUE,
                   data = Data_pivot)
 
-
-svyresult = svyby(~indicator, by = ~REGION + Source,des,svymean)
+# calculate the proportion
+svyresult = svyby(~indicator, by = ~REGION + MainHeatSource,des,svymean)
 
 svyresult$lwr = svyresult$indicator - 1.96 * svyresult$se
 svyresult$upr = svyresult$indicator + 1.96 * svyresult$se
 
 
-Data_pivot$Source = as.factor(Data_pivot$Source)
-Data_pivot$Source = relevel(Data_pivot$Source, "NGHT1")
-Data_pivot$Source =  Data_pivot$Source %>%map(Energy_map) %>% unlist()
-Data_pivot$REGION =  Data_pivot$REGION %>%map(region_map) %>% unlist()
 
+Data_pivot$MainHeatSource =  Data_pivot$MainHeatSource %>%
+  map(Energy_map) %>% unlist()
+Data_pivot$MainHeatSource = as.factor(Data_pivot$MainHeatSource)
+Data_pivot$MainHeatSource = relevel(Data_pivot$MainHeatSource, "Natural gas")
+
+# test the significance 
 des = svrepdesign(weights=sampweights, 
                   repweights=brrwts, 
                   type="Fay", 
                   rho=0.5, 
                   mse=TRUE,
                   data = Data_pivot)
-test_output = svyglm(indicator ~ Source*REGION - 1, des)
+test_output = svyglm(indicator ~ MainHeatSource:REGION +REGION, des)
 summary(test_output)
